@@ -1,0 +1,217 @@
+---
+title: "W271 Group Lab"
+subtitle: "Bike share demand"
+author: "Please fill in with your names."
+output: bookdown::pdf_document2
+fontsize: 11pt
+geometry: margin=1in
+---
+
+# Introduction (5 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+The `SeoulBikeData` data set measures the number of bike rentals (bikers) per hour in Seoul, South Korea, from December 1, 2017, to November 30, 2018. There are 8760 records/observations and 14 variables in this data set. The ‘Seoul Bike Sharing Demand Data Set’ can be downloaded from UC Irvine Machine Learning Repository: <https://archive.ics.uci.edu/ml/datasets/Seoul+Bike+Sharing+Demand>
+
+Initiate your analysis by formulating a hypothesis related to bike share demand that can be tested using a regression model. This hypothesis aims to provide decision-makers with insights into the factors influencing bike usage and demand, facilitating the optimal availability of rental bikes to the public when needed.
+
+Hypothesis:
+
+# Data (20 points)
+
+## Description (5 points)
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+```
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+Describe the data that you are using. How is this data generated, what is the sampling process that brought it to your availability, etc. If it is helpful, you might describe the population (i.e. the Random Variables) that exist and how samples are produced from these random variables.
+
+```{r}
+library(readr)
+bike_demand <- read_csv("../data/SeoulBikeData.csv", locale = locale(encoding="latin1"))
+# rename
+names(bike_demand) <- c("date", "rented_bike_count", "hour", "temperature_c", "humidity",
+               "wind_speed_m_s", "visibility_10m", "dew_point_temp_c", 
+               "solar_radiation_mj_m2", "rainfall_mm", "snowfall_cm", 
+               "season", "holiday", "functioning_day")
+head(bike_demand)
+```
+
+Sampling process
+
+## EDA (15 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+Examine the dataset and investigate anomalies, missing values, and convert variables when necessary for future analysis.
+
+```{r}
+print(summary(bike_demand))
+# str(bike_demand)
+
+# # check nans
+sum(is.na(bike_demand))
+```
+
+Conduct a thorough EDA of the data set, giving special attention to the relationships relevant to your hypothesis.
+
+-   This should include both graphical and tabular analysis as taught in this course.
+-   Since the report has a page-limit, you will have to be selective when choosing visuals to illustrate your key points, associated with a concise explanation of the visuals.
+
+```{r}
+# hist(bike_demand$rented_bike_count)
+plot_bike_cnt1 <- bike_demand %>% 
+  ggplot(aes(x = rented_bike_count)) +
+  geom_bar(width = 2) +
+  ggtitle("Distribution of rented bike count") + 
+  xlab("rented bike count") +
+  ylab("")
+
+plot_bike_cnt2 <- bike_demand %>% 
+  ggplot(aes(x = rented_bike_count)) +
+  geom_boxplot() +
+  ggtitle("Distribution of rented bike count") + 
+  xlab("rented bike count") +
+  ylab("")
+
+grid.arrange(plot_bike_cnt1, plot_bike_cnt2, nrow = 1, ncol = 2)
+```
+
+### Hour of the Day
+
+```{r}
+p1 <- bike_demand %>%
+  group_by(hour) %>%
+  summarise(total_rented = sum(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = hour, y = total_rented)) +
+  geom_line() +
+  labs(
+    title = "Total Rented Bikes by Hour",
+    x = "Hour of the Day",
+    y = "Total Rented Bikes"
+  )
+p1
+```
+
+### Day of the month
+
+```{r}
+# bike_demand %>% 
+#   mutate()
+```
+
+### By Season
+
+```{r}
+p2 <- bike_demand %>%
+  group_by(season) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = season, y = avg_rented)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Average Rented Bikes by Season",
+    x = "Season",
+    y = "Average Rented Bikes"
+  )
+p2
+```
+
+#### Holiday
+
+```{r}
+p3 <- bike_demand %>%
+  group_by(season, holiday) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = season, y = avg_rented, fill=holiday)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Average Rented Bikes by Season",
+    x = "Season",
+    y = "Average Rented Bikes"
+  )
+p3
+```
+
+#### Temperature?
+
+```{r}
+p4 <- bike_demand %>% 
+  ggplot(aes(x = temperature_c, y = rented_bike_count), color = factor(season)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Relationship Between Temperature and Bike Rentals",
+    x = "Temperature (°C)",
+    y = "Rented Bike Count"
+  ) +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  theme_minimal()
+
+p5 <- bike_demand %>% 
+  ggplot(aes(x = humidity, y = rented_bike_count)) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Relationship Between Humidity and Bike Rentals",
+    x = "Humidity",
+    y = "Rented Bike Count"
+  ) +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  theme_minimal()
+grid.arrange(p4, p5, nrow = 1, ncol = 2)
+```
+
+### 
+
+# Model Development (40 points)
+
+## Poisson regression (10 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+Estimate a simple poisson regression model (`model_poisson_1`) that includes variables as linear terms in the model based on what is essential for your hypothesis. Evaluate, using likelihood ratio tests and the statistical significance of each explanatory variable in the model. Also evaluate, using the context and data understanding that you have created in the Data section of this report, the practical significance of each explanatory variable in the model.
+
+## Model Comparison (10 points)
+
+Expand your initial poisson model through a two-step process:
+
+-   Incorporate additional variables from the dataset to avoid potential omitted variable bias. (`model_poisson_2`)
+
+-   Introduce quadratic terms or interactions when they can potentially explain variations in bike rental demand. For instance, you might consider assessing whether the effect of Hour on bike demand differs between weekdays and weekends. (`model_poisson_3`)
+
+Finally, use three information criteria for the three models (`model_poisson_1`, `model_poisson_2`, `model_poisson_3`) and rank the models based on each criterion. Are the results consistent? Why or why not?
+
+## Model Assessment (10 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+Use suitable tools like residual or standardized residual plots to assess if your final model is a good approximation of the data. Additionally, check the results for indications of potential overdispersion.
+
+-   How would you address any potential issues, including any overdispersion?
+-   Produce an adjusted version of your best model that accounts for issues noted above.
+
+## Alternative Specification (10 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+Using the same set of explanatory variables from your final model, estimate a linear regression model. Examine the summary of the model and interpret the coefficients. Obtain fitted values from both OLS and Poisson regression models and plot them. Discuss which regression model, linear or Poisson, is more suitable for this case and explain why.
+
+# Conlusion (5 points)
+
+**Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
+
+In conclusion, summarize your entire work to leave a lasting impression on the reader. Ensure you:
+
+-   Restate the main hypothesis or research question.
+
+-   Report OLS, Poisson, or any other regressions you estimated.
+
+-   Summarize key findings.
+
+-   Discuss implications.
+
+-   Address limitations.
