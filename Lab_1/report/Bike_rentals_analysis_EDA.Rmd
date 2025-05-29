@@ -22,6 +22,7 @@ Hypothesis:
 ## Description (5 points)
 
 ```{r}
+library(conflicted)
 library(tidyverse)
 library(knitr)
 library(dplyr)
@@ -80,7 +81,7 @@ plot_bike_cnt2 <- bike_demand %>%
   xlab("rented bike count") +
   ylab("")
 
-grid.arrange(plot_bike_cnt1, plot_bike_cnt2, nrow = 1, ncol = 2)
+#grid.arrange(plot_bike_cnt1, plot_bike_cnt2, nrow = 1, ncol = 2)
 ```
 
 ### Hour of the Day
@@ -162,7 +163,8 @@ p5 <- bike_demand %>%
   ) +
   geom_smooth(method = "loess", se = FALSE, color = "blue") +
   theme_minimal()
-grid.arrange(p4, p5, nrow = 1, ncol = 2)
+p4
+p5
 ```
 
 ### 
@@ -175,13 +177,54 @@ grid.arrange(p4, p5, nrow = 1, ncol = 2)
 
 Estimate a simple poisson regression model (`model_poisson_1`) that includes variables as linear terms in the model based on what is essential for your hypothesis. Evaluate, using likelihood ratio tests and the statistical significance of each explanatory variable in the model. Also evaluate, using the context and data understanding that you have created in the Data section of this report, the practical significance of each explanatory variable in the model.
 
+```{r}
+model_season <- glm(rented_bike_count ~ season, data = bike_demand, family = poisson)
+summary(model_season)
+```
+```{r}
+model_2 <- glm(rented_bike_count ~ season + hour, data = bike_demand, family = poisson)
+summary(model_2)
+```
+```{r}
+library(lubridate)
+bike_demand <- bike_demand %>%
+  mutate(
+    date = as.Date(date),
+    DayOfWeek = wday(date, label = TRUE, abbr = FALSE),
+    weekend = if_else(DayOfWeek %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+  )
+```
+
+```{r}
+model_3 <- glm(rented_bike_count ~ season + hour + weekend, data = bike_demand, 
+  family = poisson)
+summary(model_3)
+```
 ## Model Comparison (10 points)
 
 Expand your initial poisson model through a two-step process:
 
 -   Incorporate additional variables from the dataset to avoid potential omitted variable bias. (`model_poisson_2`)
 
+```{r}
+model_4 <- glm(rented_bike_count ~ season + hour + weekend + temperature_c
+  + humidity + wind_speed_m_s + dew_point_temp_c + visibility_10m + rainfall_mm
+  + snowfall_cm + functioning_day, data = bike_demand, 
+  family = poisson)
+summary(model_4)
+```
+
 -   Introduce quadratic terms or interactions when they can potentially explain variations in bike rental demand. For instance, you might consider assessing whether the effect of Hour on bike demand differs between weekdays and weekends. (`model_poisson_3`)
+
+```{r}
+model_5 <- glm(rented_bike_count ~ season + hour + weekend + temperature_c
+  + humidity + wind_speed_m_s + dew_point_temp_c + rainfall_mm + snowfall_cm 
+  + humidity:temperature_c + season:temperature_c + hour:weekend, data = bike_demand, 
+  family = poisson)
+summary(model_5)
+```
+
+
 
 Finally, use three information criteria for the three models (`model_poisson_1`, `model_poisson_2`, `model_poisson_3`) and rank the models based on each criterion. Are the results consistent? Why or why not?
 
@@ -209,6 +252,7 @@ In conclusion, summarize your entire work to leave a lasting impression on the r
 -   Restate the main hypothesis or research question.
 
 -   Report OLS, Poisson, or any other regressions you estimated.
+
 
 -   Summarize key findings.
 
