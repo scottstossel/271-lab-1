@@ -15,7 +15,7 @@ The `SeoulBikeData` data set measures the number of bike rentals (bikers) per ho
 
 Initiate your analysis by formulating a hypothesis related to bike share demand that can be tested using a regression model. This hypothesis aims to provide decision-makers with insights into the factors influencing bike usage and demand, facilitating the optimal availability of rental bikes to the public when needed.
 
-Hypothesis:
+Hypothesis: Seasonal, Daily (holiday, weekday, weather) and Hour
 
 # Data (20 points)
 
@@ -26,6 +26,9 @@ library(tidyverse)
 library(knitr)
 library(dplyr)
 library(ggplot2)
+library(gridExtra)
+library(lubridate)
+library(car)
 ```
 
 **Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
@@ -55,8 +58,33 @@ Examine the dataset and investigate anomalies, missing values, and convert varia
 print(summary(bike_demand))
 # str(bike_demand)
 
-# # check nans
+# Check nans
 sum(is.na(bike_demand))
+
+# Data transformation, extract `day`, `month` and `year` from `date` column
+bike_demand$date <- as.Date(bike_demand$date, format = "%d/%m/%Y")
+bike_demand <- bike_demand %>%
+  mutate(
+    day = day(date),
+    month = month(date),
+    year = year(date),
+    is_weekday = ifelse(wday(date) %in% c(1, 7), "no", "yes")
+  )
+
+# Add a feature for rush hour
+bike_demand <- bike_demand %>%
+  mutate(is_rush_hour = ifelse(hour %in% c(6:9, 17:19), "yes", "no"),
+         is_day = ifelse(hour %in% c(5:19), "yes", "no"))
+
+# Add log transformation for `rented_bike_count`, `rainfall_mm` and `snowfall_cm`
+bike_demand <- bike_demand %>%
+  mutate(log_bike_count = log(rented_bike_count),
+         log_rainfall = log1p(rainfall_mm),
+         log_snowfall = log1p(snowfall_cm))
+
+# Filter out non-functional days
+bike_demand_filtered <- bike_demand %>% 
+  filter(functioning_day == "Yes")
 ```
 
 Conduct a thorough EDA of the data set, giving special attention to the relationships relevant to your hypothesis.
@@ -64,16 +92,20 @@ Conduct a thorough EDA of the data set, giving special attention to the relation
 -   This should include both graphical and tabular analysis as taught in this course.
 -   Since the report has a page-limit, you will have to be selective when choosing visuals to illustrate your key points, associated with a concise explanation of the visuals.
 
+### Bike Demand Visualization
+
+-   log transformation can be used to normalize the fat tail in `rented bike count`
+
 ```{r}
 # hist(bike_demand$rented_bike_count)
-plot_bike_cnt1 <- bike_demand %>% 
+plot_bike_cnt1 <- bike_demand_filtered %>% 
   ggplot(aes(x = rented_bike_count)) +
   geom_bar(width = 2) +
   ggtitle("Distribution of rented bike count") + 
   xlab("rented bike count") +
   ylab("")
 
-plot_bike_cnt2 <- bike_demand %>% 
+plot_bike_cnt2 <- bike_demand_filtered %>% 
   ggplot(aes(x = rented_bike_count)) +
   geom_boxplot() +
   ggtitle("Distribution of rented bike count") + 
@@ -83,49 +115,51 @@ plot_bike_cnt2 <- bike_demand %>%
 grid.arrange(plot_bike_cnt1, plot_bike_cnt2, nrow = 1, ncol = 2)
 ```
 
-### Hour of the Day
+### Hour of the Day - weekday + rush hour (how to extract rush hour?)
+
+-   On average, hourly bike demand is similar on weekdays vs weekends
+
+-   Except for rush hours on weekdays, which see significant increase in bike demand
 
 ```{r}
-p1 <- bike_demand %>%
-  group_by(hour) %>%
-  summarise(total_rented = sum(rented_bike_count, na.rm = TRUE)) %>%
-  ggplot(aes(x = hour, y = total_rented)) +
+p1 <- bike_demand_filtered %>%
+  group_by(hour, is_weekday) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = hour, y = avg_rented, color = factor(is_weekday))) +
   geom_line() +
   labs(
-    title = "Total Rented Bikes by Hour",
+    title = "Average Rented Bikes by Hour",
     x = "Hour of the Day",
-    y = "Total Rented Bikes"
-  )
-p1
-```
-
-### Day of the month
-
-```{r}
-# bike_demand %>% 
-#   mutate()
-```
-
-### By Season
-
-```{r}
-p2 <- bike_demand %>%
-  group_by(season) %>%
-  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
-  ggplot(aes(x = season, y = avg_rented)) +
-  geom_bar(stat = "identity") +
-  labs(
-    title = "Average Rented Bikes by Season",
-    x = "Season",
     y = "Average Rented Bikes"
   )
-p2
+
+p2 <- bike_demand_filtered %>%
+  group_by(is_rush_hour, is_weekday) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = factor(is_rush_hour), y = avg_rented, fill = factor(is_weekday))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Rush Hours vs Non-Rush Demand",
+    x = "Rush Hour",
+    y = "Average Rented Bikes"
+  )
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
 ```
 
-#### Holiday
+### On Daily Basis
+
+#### Day of the month - doesn't seem to impact bike demand
 
 ```{r}
-p3 <- bike_demand %>%
+bike_demand_filtered %>%
+ggplot(aes(x = day, y = rented_bike_count, color=season)) +
+geom_point(alpha = 0.5)
+```
+
+#### Holiday - less bike demand on holidays, except for autumn
+
+```{r}
+p3 <- bike_demand_filtered %>%
   group_by(season, holiday) %>%
   summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
   ggplot(aes(x = season, y = avg_rented, fill=holiday)) +
@@ -133,30 +167,35 @@ p3 <- bike_demand %>%
   labs(
     title = "Average Rented Bikes by Season",
     x = "Season",
-    y = "Average Rented Bikes"
+    y = "Average Daily Rented Bikes"
   )
 p3
 ```
 
-#### Temperature?
+#### Weather
+
+1.  Temperature & humidity
+    -   temperature is highly correlated with season, both have a big impact on bike demand
+
+    -   humidity has a quadratic relationship with bike demand
 
 ```{r}
-p4 <- bike_demand %>% 
-  ggplot(aes(x = temperature_c, y = rented_bike_count), color = factor(season)) +
+p4 <- bike_demand_filtered %>% 
+  ggplot(aes(x = temperature_c, y = rented_bike_count, color = factor(season))) +
   geom_point(alpha = 0.5) +
   labs(
-    title = "Relationship Between Temperature and Bike Rentals",
+    title = "Temperature vs Bike Rentals by Season",
     x = "Temperature (°C)",
     y = "Rented Bike Count"
   ) +
   geom_smooth(method = "loess", se = FALSE, color = "blue") +
   theme_minimal()
 
-p5 <- bike_demand %>% 
-  ggplot(aes(x = humidity, y = rented_bike_count)) +
+p5 <- bike_demand_filtered %>% 
+  ggplot(aes(x = humidity, y = rented_bike_count, color = factor(season))) +
   geom_point(alpha = 0.5) +
   labs(
-    title = "Relationship Between Humidity and Bike Rentals",
+    title = "Humidity vs Bike Rentals by Season",
     x = "Humidity",
     y = "Rented Bike Count"
   ) +
@@ -165,7 +204,66 @@ p5 <- bike_demand %>%
 grid.arrange(p4, p5, nrow = 1, ncol = 2)
 ```
 
-### 
+2.  rainfall & snowfall - both are heavily skewed and negatively impact bike demand
+
+```{r}
+p6 <- bike_demand_filtered %>% 
+  ggplot(aes(x = log1p(rainfall_mm), y = rented_bike_count, color = factor(season))) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Rainfall vs Bike Rentals",
+    x = "Rainfall",
+    y = "Rented Bike Count"
+  ) +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  theme_minimal()
+
+p7 <- bike_demand_filtered %>% 
+  ggplot(aes(x = log1p(snowfall_cm), y = rented_bike_count, color = factor(season))) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = "Snowfall vs Bike Rentals",
+    x = "Snowfall",
+    y = "Rented Bike Count"
+  ) +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  theme_minimal()
+grid.arrange(p6, p7, nrow = 1, ncol = 2)
+```
+
+### By Season -
+
+-   `season` has big impact on bike demand(check the `holiday` graph)
+
+-   Compared to `hour`, `weekday`, the impact from `season` is less obvious
+
+```{r}
+p8 <- bike_demand_filtered %>%
+  filter(is_weekday=="yes") %>%
+  group_by(hour, season) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = hour, y = avg_rented, color = factor(season))) +
+  geom_line() +
+  labs(
+    title = "Bike Demand by Hour(weekdays)",
+    x = "Hour of the Day",
+    y = "Average Rented Bikes(hourly)"
+  )
+
+p9 <- bike_demand_filtered %>%
+  filter(is_weekday=="no") %>%
+  group_by(hour, season) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  ggplot(aes(x = hour, y = avg_rented, color = factor(season))) +
+  geom_line() +
+  labs(
+    title = "Bike Demand by Hour(weekends)",
+    x = "Hour of the Day",
+    y = "Average Rented Bikes(hourly)"
+  )
+
+grid.arrange(p8, p9, nrow = 1, ncol = 2)
+```
 
 # Model Development (40 points)
 
@@ -174,6 +272,18 @@ grid.arrange(p4, p5, nrow = 1, ncol = 2)
 **Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
 
 Estimate a simple poisson regression model (`model_poisson_1`) that includes variables as linear terms in the model based on what is essential for your hypothesis. Evaluate, using likelihood ratio tests and the statistical significance of each explanatory variable in the model. Also evaluate, using the context and data understanding that you have created in the Data section of this report, the practical significance of each explanatory variable in the model.
+
+```{r}
+model_poisson_1 <- glm(rented_bike_count ~ is_weekday + hour + temperature_c + log1p(rainfall_mm) + log1p(snowfall_cm) + season, data = bike_demand_filtered, family = poisson())
+summary(model_poisson_1)
+# Likelihood ratio test
+library(car)
+Anova(mod = model_poisson_1, type = 3, test="LR") #This tests each variable as if it were added last (type=3)
+```
+
+Conclusion:
+
+-   rush hour, seasonality(winter particularly) and rainfall make a big impact bike demand
 
 ## Model Comparison (10 points)
 
@@ -184,6 +294,47 @@ Expand your initial poisson model through a two-step process:
 -   Introduce quadratic terms or interactions when they can potentially explain variations in bike rental demand. For instance, you might consider assessing whether the effect of Hour on bike demand differs between weekdays and weekends. (`model_poisson_3`)
 
 Finally, use three information criteria for the three models (`model_poisson_1`, `model_poisson_2`, `model_poisson_3`) and rank the models based on each criterion. Are the results consistent? Why or why not?
+
+```{r}
+model_poisson_2 <- glm(rented_bike_count ~ is_weekday + hour + is_day + is_rush_hour + log1p(rainfall_mm) + log1p(snowfall_cm) + season
+                       + temperature_c, data = bike_demand_filtered, family = poisson())
+anova(model_poisson_1, model_poisson_2, test="Chisq")
+```
+
+```{r}
+bike_demand_filtered
+bike_demand_filtered <- bike_demand_filtered %>%
+  mutate(
+    season = relevel(factor(season), ref = "Winter"),
+    is_rush_hour = relevel(factor(is_rush_hour), ref = "no"),
+    is_weekday = relevel(factor(is_weekday), ref = "no")
+  )
+
+model_poisson_3 <- glm(rented_bike_count ~ is_weekday 
+                       + hour + is_day + is_rush_hour
+                       # + is_rush_hour:is_day # the nans here indicates complete separation between is_rush_hour and is_day
+                       + is_day:is_weekday
+                       + is_rush_hour:is_weekday
+                       + log1p(rainfall_mm) + log1p(snowfall_cm) 
+                       + season + temperature_c
+                       + season:temperature_c,
+                       data = bike_demand_filtered,
+                       family = poisson()
+)
+summary(model_poisson_3)
+```
+
+**Conclusion:**
+
+-   Weekday vs weekends doesnt make a big difference although it's statistically significant
+
+-   Unless it's weekday rush hour, see rush hour and the interaction term
+
+-   Rainfall reduces the demand, a lot more than snowfall
+
+-   Summer adds demand meaningfully, followed by autumn, surprisingly Spring doesnt add too much
+
+-   Temperature doesnt have a huge influence on average, but different season sees different relationship between temperature and bike demand
 
 ## Model Assessment (10 points)
 
@@ -200,7 +351,7 @@ Use suitable tools like residual or standardized residual plots to assess if you
 
 Using the same set of explanatory variables from your final model, estimate a linear regression model. Examine the summary of the model and interpret the coefficients. Obtain fitted values from both OLS and Poisson regression models and plot them. Discuss which regression model, linear or Poisson, is more suitable for this case and explain why.
 
-# Conlusion (5 points)
+# Conclusion (5 points)
 
 **Complete the following task. In your final submission, please remove this question prompt so that your report reads as a report.**
 
