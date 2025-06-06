@@ -274,6 +274,15 @@ grid.arrange(p8, p9, nrow = 1, ncol = 2)
 Estimate a simple poisson regression model (`model_poisson_1`) that includes variables as linear terms in the model based on what is essential for your hypothesis. Evaluate, using likelihood ratio tests and the statistical significance of each explanatory variable in the model. Also evaluate, using the context and data understanding that you have created in the Data section of this report, the practical significance of each explanatory variable in the model.
 
 ```{r}
+bike_demand_filtered <- bike_demand_filtered %>%
+  mutate(
+    season = relevel(factor(season), ref = "Winter"),
+    is_rush_hour = relevel(factor(is_rush_hour), ref = "no"),
+    is_weekday = relevel(factor(is_weekday), ref = "no")
+  )
+```
+
+```{r}
 model_poisson_1 <- glm(rented_bike_count ~ is_weekday + hour + temperature_c + log1p(rainfall_mm) + log1p(snowfall_cm) + season, data = bike_demand_filtered, family = poisson())
 summary(model_poisson_1)
 # Likelihood ratio test
@@ -296,27 +305,25 @@ Expand your initial poisson model through a two-step process:
 Finally, use three information criteria for the three models (`model_poisson_1`, `model_poisson_2`, `model_poisson_3`) and rank the models based on each criterion. Are the results consistent? Why or why not?
 
 ```{r}
-model_poisson_2 <- glm(rented_bike_count ~ is_weekday + hour + is_day + is_rush_hour + log1p(rainfall_mm) + log1p(snowfall_cm) + season
-                       + temperature_c, data = bike_demand_filtered, family = poisson())
+model_poisson_2 <- glm(rented_bike_count ~ is_weekday + hour 
+                       + is_day + is_rush_hour 
+                       + temperature_c + log1p(rainfall_mm) + log1p(snowfall_cm) + season
+                       + humidity + wind_speed_m_s + visibility_10m + solar_radiation_mj_m2 + holiday
+                       , data = bike_demand_filtered, family = poisson())
 anova(model_poisson_1, model_poisson_2, test="Chisq")
+summary(model_poisson_2)
 ```
 
 ```{r}
-bike_demand_filtered
-bike_demand_filtered <- bike_demand_filtered %>%
-  mutate(
-    season = relevel(factor(season), ref = "Winter"),
-    is_rush_hour = relevel(factor(is_rush_hour), ref = "no"),
-    is_weekday = relevel(factor(is_weekday), ref = "no")
-  )
-
-model_poisson_3 <- glm(rented_bike_count ~ is_weekday 
-                       + hour + is_day + is_rush_hour
+model_poisson_3 <- glm(rented_bike_count ~ is_weekday + hour 
+                       + is_day + is_rush_hour 
+                       + temperature_c + log1p(rainfall_mm) + log1p(snowfall_cm) + season
+                       + humidity + wind_speed_m_s + visibility_10m + solar_radiation_mj_m2 + holiday
                        # + is_rush_hour:is_day # the nans here indicates complete separation between is_rush_hour and is_day
                        + is_day:is_weekday
                        + is_rush_hour:is_weekday
                        + log1p(rainfall_mm) + log1p(snowfall_cm) 
-                       + season + temperature_c
+                       + temperature_c
                        + season:temperature_c,
                        data = bike_demand_filtered,
                        family = poisson()
@@ -343,7 +350,35 @@ summary(model_poisson_3)
 Use suitable tools like residual or standardized residual plots to assess if your final model is a good approximation of the data. Additionally, check the results for indications of potential overdispersion.
 
 -   How would you address any potential issues, including any overdispersion?
+
 -   Produce an adjusted version of your best model that accounts for issues noted above.
+
+    ```{r}
+    residuals<- resid(model_poisson_3)
+    fitted_vals <- model_poisson_3$fitted.values
+
+    df_resid <- data.frame(
+      fitted_vals = fitted_vals,
+      resid = residuals
+    )
+
+    # ggplot(df_resid, aes(x = fitted_vals , y = resid)) +
+    #   geom_point() +
+    #   labs(title = "Residuals vs Fitted values",
+    #        x = "Fitted values",
+    #        y = "Residuals") +
+    #   theme_minimal()
+
+    plot(model_poisson_3, which = 1, main = "Model Fit")
+    ```
+
+    **Overdispersion:**
+
+-   Are the days independent?
+
+-   Omitted variables?
+
+-   IID violated?
 
 ## Alternative Specification (10 points)
 
