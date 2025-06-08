@@ -331,6 +331,91 @@ model_poisson_3 <- glm(rented_bike_count ~ is_weekday + hour
 summary(model_poisson_3)
 ```
 
+```{r}
+#  poisson fit
+library(vcd)
+rented_bikes <- bike_demand_filtered$rented_bike_count
+rented_bikes_mean <- mean(rented_bikes)
+rented_bikes_var <- var(rented_bikes)
+rented_bikes_fit <- goodfit(rented_bikes, "poisson")
+summary(rented_bikes_fit)
+```
+
+```{r}
+#  Robust standard errors
+library(stargazer)
+model_poisson_base_1 <- coeftest(model_poisson_1)
+model_poisson_base_2 <- coeftest(model_poisson_2)
+model_poisson_base_3 <- coeftest(model_poisson_3)
+
+model_poisson_rse_1 <- coeftest(model_poisson_1, vcov = vcovHC(model_poisson_1, type="HC0"))
+model_poisson_rse_2 <- coeftest(model_poisson_2, vcov = vcovHC(model_poisson_2, type="HC0"))
+model_poisson_rse_3 <- coeftest(model_poisson_3, vcov = vcovHC(model_poisson_3, type="HC0"))
+
+stargazer(model_poisson_base_1, model_poisson_rse_1, type = "text", title = "Model 1 with Robust SE")
+stargazer(model_poisson_base_2, model_poisson_rse_2, type = "text", title = "Model 2 with Robust SE")
+stargazer(model_poisson_base_3, model_poisson_rse_3, type = "text", title = "Model 3 with Robust SE")
+```
+, 
+```{r}
+#  negative binomial models
+library(MASS)
+model_nb_1 <- glm.nb(rented_bike_count ~ is_weekday 
+                  + hour 
+                  + temperature_c 
+                  + log1p(rainfall_mm) 
+                  + log1p(snowfall_cm) 
+                  + season, 
+                  data = bike_demand_filtered)
+
+model_nb_2 <- glm.nb(rented_bike_count ~ is_weekday 
+                  + hour 
+                  + is_day 
+                  + is_rush_hour 
+                  + temperature_c 
+                  + log1p(rainfall_mm) 
+                  + log1p(snowfall_cm) 
+                  + season
+                  + humidity 
+                  + wind_speed_m_s 
+                  + visibility_10m 
+                  + solar_radiation_mj_m2 
+                  + holiday, 
+                  data = bike_demand_filtered)
+
+model_nb_3 <- glm.nb(rented_bike_count ~ is_weekday
+                  + hour 
+                  + is_day
+                  + is_rush_hour 
+                  + temperature_c
+                  + log1p(rainfall_mm)
+                  + log1p(snowfall_cm)
+                  + season
+                  + humidity
+                  + wind_speed_m_s
+                  + visibility_10m
+                  + solar_radiation_mj_m2
+                  + holiday
+                  + is_day:is_weekday
+                  + is_rush_hour:is_weekday
+                  + log1p(rainfall_mm) 
+                  + log1p(snowfall_cm) 
+                  + temperature_c
+                  + season:temperature_c,
+                  data = bike_demand_filtered)
+
+model_nb_1 <- coeftest(model_nb_1)
+model_nb_2 <- coeftest(model_nb_2)
+model_nb_3 <- coeftest(model_nb_3)
+
+stargazer(model_poisson_base_1, model_nb_1, type = "text", title = "Poisson vs NegBin Model 1")
+stargazer(model_poisson_base_2, model_nb_2, type = "text", title = "Poisson vs NegBin Model 2")
+stargazer(model_poisson_base_3, model_nb_3, type = "text", title = "Poisson vs NegBin Model 3")
+
+
+```
+
+
 **Conclusion:**
 
 -   Weekday vs weekends doesnt make a big difference although it's statistically significant
