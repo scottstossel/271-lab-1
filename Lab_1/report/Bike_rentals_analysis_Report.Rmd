@@ -287,32 +287,17 @@ Practical findings from our best model (Model 3), highlight several key factors 
 
 # Model Assessment
 
-An assumption required for using Poisson distribution was violated in the bike rental dataset. Poisson random variables are assumed to be taken from a distribution that has a mean equal to the variance, but rented_bikes_count has a log mean of 6.59 (log(729)) and a log variance of 12.93 (log(412,615)), so it does not seem appropriate to use this method.  We run a chi-square goodness of fit test on rented_bikes_count for confirmation.  At any reasonable level of significance, we reject the null hypothesis that the data came from a poisson distribution. Since the variability of the rented bikes is greater than the average level we expect from a poisson random variable (variance \> mean), our models exhibit overdispersion, resulting in underestimated standard errors and in turn overly narrow confidence intervals.  This likely explains why all coefficients in our poisson models were statistically significant, even though this seems unlikely. 
-
 ```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
-model_nb_1 <- glm.nb(rented_bike_count ~ is_weekday 
-                  + hour 
-                  + temperature_c 
-                  + log1p(rainfall_mm) 
-                  + log1p(snowfall_cm) 
-                  + season, 
-                  data = bike_demand_filtered)
+#  poisson fit
+library(vcd)
+rented_bikes <- bike_demand_filtered$rented_bike_count
+rented_bikes_mean <- mean(rented_bikes)
+rented_bikes_var <- var(rented_bikes)
+rented_bikes_fit <- goodfit(rented_bikes, "poisson")
 
-model_nb_2 <- glm.nb(rented_bike_count ~ is_weekday 
-                  + hour 
-                  + is_day 
-                  + is_rush_hour 
-                  + temperature_c 
-                  + log1p(rainfall_mm) 
-                  + log1p(snowfall_cm) 
-                  + season
-                  + humidity 
-                  + wind_speed_m_s 
-                  + visibility_10m 
-                  + solar_radiation_mj_m2 
-                  + holiday, 
-                  data = bike_demand_filtered)
-
+#  alt methods
+model_poisson_base_3 <- coeftest(model_poisson_3)
+model_poisson_rse_3 <- coeftest(model_poisson_3, vcov = vcovHC(model_poisson_3), type="HC0")
 model_nb_3 <- glm.nb(rented_bike_count ~ is_weekday
                   + hour 
                   + is_day
@@ -334,19 +319,35 @@ model_nb_3 <- glm.nb(rented_bike_count ~ is_weekday
                   + season:temperature_c,
                   data = bike_demand_filtered)
 
-model_nb_1 <- coeftest(model_nb_1)
-model_nb_2 <- coeftest(model_nb_2)
 model_nb_3 <- coeftest(model_nb_3)
 ```
 
-To address this problem, we first try using robust standard errors.  The tables below compare results from each of the three models with and without robust standard errors.  It does not appear that using robust standard errors is enough to correct for overdispersion in our model, since the coefficients do not change.
+An assumption required for using Poisson distribution was violated in the bike rental dataset. Poisson random variables are assumed to be taken from a distribution that has a mean equal to the variance, but rented_bikes_count has a log mean of 6.59 (log(729)) and a log variance of 12.93 (log(412,615)), so it does not seem appropriate to use this method. We run a chi-square goodness of fit test on rented_bikes_count for confirmation.  At any reasonable level of significance, we reject the null hypothesis that the data came from a poisson distribution.
 
-ADDED METHODS, TABLES TO MARKDOWN, will double check
+Since the variance of rented_bikes_count is much greater than what we would expected from a poisson random variable (for which, we assume variance = mean), our models exhibit overdispersion, resulting in underestimated standard errors.  The incorrect errors lead to confidence intervals that are too narrow, which likely explains why all coefficients in our poisson models were statistically significant.  
 
-As a more extreme measure, we change our modeling approach to use negative binomial regression, which introduces a dispersion parameter.  We run all three models using this approach and compare the results to the original poisson models.
+To address this problem, we first try using robust standard errors The tables below compare results from Model 3 without robust standard errors.  It does not appear that using robust standard errors is enough to correct for overdispersion in our model.  Though the confidence intervals are wider for all coefficients, all but four are still significant at the 99% level.  The table below shows the coefficients that are no longer significant when we apply robust standard errors (the two significant coefficients shown are for interaction terms that include is_weekday)
 
 ```{r show-stargazer-NegBinary, results='asis', echo=FALSE, message=FALSE, warning=FALSE, header=FALSE}
-stargazer(model_poisson_3, 
+stargazer(
+  model_poisson_base_3, 
+  model_poisson_rse_3, 
+  keep = c("is_weekdayyes", "wind_speed_m_s", "visibility_10m", "temperature_c:seasonSpring"),
+  column.labels = c("Poisson", "Poisson with Robust SE"),
+  type = "text", 
+  title = "Model 3 with Robust SE",
+  dep.var.labels = "",
+  notes.align = "l",
+  column.sep.width = "-10pt",
+  font.size = "scriptsize",  
+  out.header = FALSE,
+  comment = FALSE)
+  
+```
+As a more extreme measure, we change our modeling approach to use Negative Binomial Regression, which introduces new coefficient estimates and a dispersion parameter. We use this approach with the same independent variables we use for Model 3 and compare the results of the two models.  Though the Negative Binomial model still had many coefficients that were significant at the 99% level, it had a much lower AIC (117,719) than the best Poisson Model 3 (1,108,725), indicating the Negative Binomial model is more appropriate for modeling rented_bikes_count. 
+
+```{r show-stargazer-NegBinary, results='asis', echo=FALSE, message=FALSE, warning=FALSE, header=FALSE}
+stargazer-NegBinary <-stargazer(model_poisson_3, 
           model_nb_3, 
           type = "latex", 
           title = "Poisson vs NegBin Model 3",
@@ -355,11 +356,9 @@ stargazer(model_poisson_3,
           notes.align = "l",
           column.sep.width = "-10pt",
           font.size = "scriptsize",  
-          out.header = TRUE,
+          out.header = FALSE,
           comment = FALSE)
 ```
-
-Many of the coefficients are still significant in the negative binomial regression models, but each had to meet a higher threshold since this involved larger standard errors and wider confidence intervals.  In general, it seems that negative binomial regression is a more appropriate model to use for the rented bike dataset since the variance of rented_bike_count substantially exceeds its mean.
 
 # Alternative Specification
 
