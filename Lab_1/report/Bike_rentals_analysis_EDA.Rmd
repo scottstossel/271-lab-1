@@ -56,10 +56,20 @@ Examine the dataset and investigate anomalies, missing values, and convert varia
 
 ```{r}
 print(summary(bike_demand))
-# str(bike_demand)
+str(bike_demand)
 
-# Check nans
-sum(is.na(bike_demand))
+# Check nans - zero
+colSums(is.na(bike_demand))
+
+# Check duplicates - zero
+bike_demand %>%
+  group_by(date, hour) %>%
+  summarise(count = n(), .groups = "drop") %>% 
+  arrange(desc(count))
+
+# Check if anormalies in bike demand - right skewed
+bike_demand %>% 
+  filter((functioning_day == "Yes") & (rented_bike_count==0))
 
 # Data transformation, extract `day`, `month` and `year` from `date` column
 bike_demand$date <- as.Date(bike_demand$date, format = "%d/%m/%Y")
@@ -100,10 +110,13 @@ Conduct a thorough EDA of the data set, giving special attention to the relation
 # hist(bike_demand$rented_bike_count)
 plot_bike_cnt1 <- bike_demand_filtered %>% 
   ggplot(aes(x = rented_bike_count)) +
-  geom_bar(width = 2) +
+  geom_histogram(aes(y = after_stat(count / sum(count))), width = 2, fill = "#999999", color = "white") +
   ggtitle("Distribution of rented bike count") + 
   xlab("rented bike count") +
-  ylab("")
+  ylab("percentage") +
+  theme_minimal()
+
+plot_bike_cnt1
 
 plot_bike_cnt2 <- bike_demand_filtered %>% 
   ggplot(aes(x = rented_bike_count)) +
@@ -124,25 +137,39 @@ grid.arrange(plot_bike_cnt1, plot_bike_cnt2, nrow = 1, ncol = 2)
 ```{r}
 p1 <- bike_demand_filtered %>%
   group_by(hour, is_weekday) %>%
-  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
+  summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE), .groups = "drop") %>%
   ggplot(aes(x = hour, y = avg_rented, color = factor(is_weekday))) +
-  geom_line() +
+  geom_line(size = 1.2) +
+  scale_color_manual(
+    values = c("yes" = "#6688BB", "no" = "#ffc000"),
+    labels = c("yes"="Weekday", "no" = "Weekends"),
+    name = "Day Type"
+  ) +
   labs(
     title = "Average Rented Bikes by Hour",
     x = "Hour of the Day",
     y = "Average Rented Bikes"
-  )
+  ) +
+  theme_minimal()
+
+p1
 
 p2 <- bike_demand_filtered %>%
   group_by(is_rush_hour, is_weekday) %>%
   summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
   ggplot(aes(x = factor(is_rush_hour), y = avg_rented, fill = factor(is_weekday))) +
   geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(
+  values = c("yes" = "#6688BB", "no" = "#ffc000"),
+  labels = c("yes"="Weekday", "no" = "Weekends"),
+  name = "Day Type") +
   labs(
     title = "Rush Hours vs Non-Rush Demand",
     x = "Rush Hour",
     y = "Average Rented Bikes"
-  )
+  ) +
+  theme_minimal()
+p2
 grid.arrange(p1, p2, nrow = 1, ncol = 2)
 ```
 
@@ -162,14 +189,19 @@ geom_point(alpha = 0.5)
 p3 <- bike_demand_filtered %>%
   group_by(season, holiday) %>%
   summarise(avg_rented = mean(rented_bike_count, na.rm = TRUE)) %>%
-  ggplot(aes(x = season, y = avg_rented, fill=holiday)) +
+  ggplot(aes(x = season, y = avg_rented, fill=factor(holiday))) +
   geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(
+  values = c("Holiday" = "#ffc000", "No Holiday" = "#6688BB"),
+  labels = c("Holiday"="holiday", "No Holiday" = "non-holidays"),
+  name = "Day Type") +
   labs(
     title = "Average Rented Bikes by Season",
     x = "Season",
     y = "Average Daily Rented Bikes"
   )
 p3
+
 ```
 
 #### Weather
