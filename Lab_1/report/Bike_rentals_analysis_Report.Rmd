@@ -32,6 +32,7 @@ library(kableExtra)
 library(MASS)
 library(lmtest)
 library(stargazer)
+library(sandwich)
 
 bike_demand <- read_csv("../data/SeoulBikeData.csv", locale = locale(encoding="latin1"))
 # rename
@@ -82,8 +83,46 @@ The data set comes from the Seoul Bike Sharing System, also known as Ddareungi, 
 **PLACEHOLDER FOR DATA DESCRIPTION TABLE**
 
 ```{r show-data_description_table, results='asis', echo=FALSE}
-# change the first row to {r show-data_description_table, results='asis', echo=FALSE}
-# PLACEHOLDER FOR data description
+data_description_table <- data.frame(
+  Column = c(
+    "date",
+    "rented_bike_count",
+    "hour",
+    "temperature_c",
+    "humidity",
+    "wind_speed_m_s",
+    "visibility_10m",
+    "dew_point_temp_c",
+    "solar_radiation_mj_m2",
+    "rainfall_mm",
+    "snowfall_cm",
+    "season",
+    "holiday",
+    "functional_day"
+  ),
+  Description = c(
+    "Year-Month-Day",
+    "Count of bikes rented at each hour",
+    "Hour of the day (0–23)",
+    "Temperature in Celsius",
+    "Percentage humidity",
+    "Wind speed in m/s",
+    "Visibility in 10m",
+    "Dew point temperature in Celsius",
+    "Solar radiation in MJ/m²",
+    "Rainfall in mm",
+    "Snowfall in cm",
+    "Season (Winter, Spring, Summer, Autumn)",
+    "Holiday/No holiday indicator",
+    "Functional/Non-functional hours indicator"
+  )
+)
+
+library(knitr)
+
+# Show all rows with a caption
+kable(data_description_table, caption = "Dataset Variables and Their Descriptions")
+
 ```
 
 The Seoul Bike Sharing System automatically records information upon any rental at every one of their stations. This dataset spans every hour from December 2017 to November 2018. Since every rental event is recorded this data represents a city-wide census of bike sharing information rather than a sample. The sampling is not strictly identically distributed as different seasons exhibit varying distributions of bike rentals. In addition, the samples are not exactly independent due to temporal patterns.
@@ -341,13 +380,14 @@ stargazer(
   column.sep.width = "-10pt",
   font.size = "scriptsize",  
   out.header = FALSE,
+  header = FALSE,
   comment = FALSE)
   
 ```
 As a more extreme measure, we change our modeling approach to use Negative Binomial Regression, which introduces new coefficient estimates and a dispersion parameter. We use this approach with the same independent variables we use for Model 3 and compare the results of the two models.  Though the Negative Binomial model still had many coefficients that were significant at the 99% level, it had a much lower AIC (117,719) than the best Poisson Model 3 (1,108,725), indicating the Negative Binomial model is more appropriate for modeling rented_bikes_count. 
 
 ```{r show-stargazer-NegBinary, results='asis', echo=FALSE, message=FALSE, warning=FALSE, header=FALSE}
-stargazer-NegBinary <-stargazer(model_poisson_3, 
+stargazer(model_poisson_3, 
           model_nb_3, 
           type = "latex", 
           title = "Poisson vs NegBin Model 3",
@@ -357,6 +397,7 @@ stargazer-NegBinary <-stargazer(model_poisson_3,
           column.sep.width = "-10pt",
           font.size = "scriptsize",  
           out.header = FALSE,
+          header = FALSE,
           comment = FALSE)
 ```
 
