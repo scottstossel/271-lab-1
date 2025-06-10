@@ -75,7 +75,7 @@ In Seoul, South Korea, there exist a variety of factors that determine bike rent
 
 We hypothesize that time of day, season, day of the week, and weather all influence the usage and demand of rental bikes. While weather plays an important role in rental bike usage, time of day, season, and day of the week are consistent events that businesses can reliably plan around. Understanding exactly how these factors influence demand can help businesses best optimize their bike availability based on known usage patterns.
 
-Let the model be:
+The Poisson regression can be represented by the following:
 
 $$
 \log(\mathbb{E}[\text{Bikes Rented}]) = \beta_0 + \beta_1 \cdot \text{hour} + \beta_2 \cdot \text{season} + \beta_3 \cdot \text{weekday} + \beta_4 \cdot \text{temperature}
