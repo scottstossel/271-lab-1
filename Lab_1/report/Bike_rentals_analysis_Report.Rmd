@@ -9,6 +9,7 @@ author:
   - Lyn Wang
 output: 
   bookdown::pdf_document2:
+    latex_engine: xelatex
     toc: false
     includes:
       in_header: preamble.tex
@@ -18,6 +19,8 @@ fontsize: 11pt
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+install.packages("kableExtra")
+install.packages("float")
 library(tidyverse)
 library(knitr)
 library(dplyr)
@@ -68,21 +71,29 @@ bike_demand_filtered <- bike_demand %>%
 
 # Introduction
 
-In Seoul, South Korea, there exist a wide variety of factors that determine bike rental demand. The time of day, whether it is a weekday or weekend, and the weather among other factors all can impact demand. In order to maximize profit, bike rental businesses should use these variables to optimize the availability of rental bikes for the public. Tasks such as maintenance and logistics can be scheduled during periods of low demand so that busier times do not experience any shortages of supply. 
+In Seoul, South Korea, there exist a variety of factors that determine bike rental demand. The time of day, whether it is a weekday or weekend, and the weather among other factors all can impact demand. In order to maximize profit, bike rental businesses should use these variables to optimize the availability of rental bikes for the public. Tasks such as maintenance and logistics can be scheduled during periods of low demand so that busier times do not experience any shortages of supply. 
 
-We hypothesize that time of day, season, day of the week, and weather all influence the usage and demand of rental bikes, with the most important being the first three. While weather plays an important role in rental bike usage, time of day, season, and day of the week are consistent events that businesses can reliably plan around. Understanding how these factors influence demand can help businesses best optimize their bike availability based on known usage patterns.
+We hypothesize that time of day, season, day of the week, and weather all influence the usage and demand of rental bikes. While weather plays an important role in rental bike usage, time of day, season, and day of the week are consistent events that businesses can reliably plan around. Understanding exactly how these factors influence demand can help businesses best optimize their bike availability based on known usage patterns.
 
-H0: Time of day, season, day of the week, and temperature have no effect on the number of bikes rented.
+Let the model be:
 
-Ha: != 0
+$$
+\log(\mathbb{E}[\text{Bikes Rented}]) = \beta_0 + \beta_1 \cdot \text{hour} + \beta_2 \cdot \text{season} + \beta_3 \cdot \text{weekday} + \beta_4 \cdot \text{temperature}
+$$
+
+$$
+H_0: \beta_1 = \beta_2 = \beta_3 = \beta_4 = 0
+$$
+
+$$
+H_1: \text{At least one of } \beta_1, \beta_2, \beta_3, \beta_4 \neq 0
+$$
 
 # Description of Data
 
-The data set comes from the Seoul Bike Sharing System, also known as Ddareungi, with corresponding weather related data along with holiday information. Each row corresponds to one hour of the following information in the format: Date (DD/MM/YYYY), Rented Bike Count (number of bikes rented that hour), Hour (0-23), Temperature (℃), Humidity (%), Wind speed (m/s), Visibility (10 m), Dew point temperature (℃), Solar Radiation (MJ/m2), Rainfall (mm), Snowfall (cm), Seasons (Winter, Spring, Summer, or Autumn), Holiday (No Holiday or Holiday), and Functioning Day (Yes or No).
+The data set comes from the Seoul Bike Sharing System, also known as Ddareungi, with corresponding weather related data along with holiday information. Each row corresponds to information aggregated from the past hour. The following information is recorded: 
 
-**PLACEHOLDER FOR DATA DESCRIPTION TABLE**
-
-```{r show-data_description_table, results='asis', echo=FALSE}
+```{r show-data_description_table, fig.pos='H', results='asis', echo=FALSE}
 data_description_table <- data.frame(
   Column = c(
     "date",
@@ -115,21 +126,56 @@ data_description_table <- data.frame(
     "Season (Winter, Spring, Summer, Autumn)",
     "Holiday/No holiday indicator",
     "Functional/Non-functional hours indicator"
-  )
+  ),
+  stringsAsFactors = FALSE
 )
 
-library(knitr)
+# Output LaTeX table
+# cat("\\begin{table}[ht]
+# \\centering
+# \\begin{tabular}{|l|p{10cm}|}
+# \\hline
+# \\textbf{Column} & \\textbf{Description} \\\\
+# \\hline\n")
+# 
+# for (i in 1:nrow(data_description_table)) {
+#   col <- gsub("_", "\\\\_", data_description_table$Column[i]) # Escape underscores
+#   desc <- gsub("_", "\\\\_", data_description_table$Description[i])
+#   cat(paste0(col, " & ", desc, " \\\\\n"))
+# }
+# 
+# cat("\\hline
+# \\end{tabular}
+# \\caption{Description of Data Columns}
+# \\label{tab:data_description}
+# \\end{table}")
+cat("\\begin{table}[H]
+\\centering
+\\scriptsize
+\\begin{tabular}{|l|p{10cm}|}
+\\hline
+\\textbf{Column} & \\textbf{Description} \\\\
+\\hline\n")
 
-# Show all rows with a caption
-kable(data_description_table, caption = "Dataset Variables and Their Descriptions")
+for (i in 1:nrow(data_description_table)) {
+  col <- gsub("_", "\\\\_", data_description_table$Column[i])
+  desc <- gsub("_", "\\\\_", data_description_table$Description[i])
+  cat(paste0(col, " & ", desc, " \\\\\n"))
+}
+
+cat("\\hline
+\\end{tabular}
+\\caption{Description of Data Columns}
+\\label{tab:data_description}
+\\end{table}")
 
 ```
 
-The Seoul Bike Sharing System automatically records information upon any rental at every one of their stations. This dataset spans every hour from December 2017 to November 2018. Since every rental event is recorded this data represents a city-wide census of bike sharing information rather than a sample. The sampling is not strictly identically distributed as different seasons exhibit varying distributions of bike rentals. In addition, the samples are not exactly independent due to temporal patterns.
+The Seoul Bike Sharing System automatically records information upon any rental at every one of their stations. This dataset spans every hour from December 2017 to November 2018. Since every rental event is recorded this data represents a city-wide census of bike sharing information rather than a sample. The sampling is not strictly identically distributed as different seasons exhibit varying distributions of bike rentals. In addition, the samples are not exactly independent due to temporal patterns. 
 
 # EDA
 
-The dataset contains no missing values, and each row is uniquely defined by a combination of date and hour. We filtered out non-functioning days to focus only on operational periods. The distribution of bike Rentals during each hour is highly right-skewed, using a log transformation on our dependent variable might be appropriate as it improves model interpretability and reduces the influence of extreme values (Figure 1).
+The dataset contains no missing values, and each row is uniquely defined by a combination of date and hour. We filtered out non-functioning days to focus only on operational periods. The distribution of bike rentals during each hour is highly right-skewed. A log transformation on our dependent variable might be appropriate as it improves model interpretability and reduces the influence of extreme values (Figure 1).
 
 ```{r bike-count-plot, echo=FALSE, fig.cap="Distribution of Bike Count", fig.align='center', fig.width=9.75, fig.height=4.5, out.width='74%', fig.show='hold', warning=FALSE}
 # figure 1
@@ -145,9 +191,9 @@ plot_bike_cnt1 <- bike_demand_filtered %>%
 plot_bike_cnt1
 ```
 
-For data transformation, we extracted \`is_weekday\` to distinguish weekday vs weekends, and created two variables based on whether the hour falls in a rush period \`is_rush\` and whether it is daytime hours \`is_day\` to help us understand the usage behavior during the day. Specifically, Rush Hour is defined as 6-9 AM and 5-7 PM, which is aimed at capturing the outlier demand. Defining day vs night helps to differentiate day vs night behavior.
+For data transformation, we extracted \`is_weekday\` to distinguish between weekdays vs weekends, then we created two additional variables: \`is_rush\`, indicating whether the hour falls within a rush period, and \`is_day\`, capturing whether it occurs during daytime hours. We defined rush hour as 6-9 AM and 5-7 PM, which is aimed at capturing the outlier demand. Defining day (5 AM-7 PM) versus night hours helps to differentiate usage patterns between daylight and nighttime periods. Together, these variables help us understand usage throughout the day.
 
-To test the core part of our hypothesis—that time-related variables explain bike demand—we began by plotting average rentals by hour, segmented by weekday/weekend. We observe a clear surge in demand during rush hours on weekdays, suggesting strong commuter usage (Figure 2 RHS). Outside of these rush hours, demand gradually increases from early morning (\~5 AM) until \~7 PM on both weekdays and weekends, showing a generally consistent usage pattern. (Figure 2 LHS) We further confirmed this with a bar plot that compares demand across: Rush vs. non-rush hours and Weekdays vs. weekends. The effect of rush hour is visibly stronger than the day-of-week difference, supporting our hypothesis that time of day is a primary driver of demand.
+To test the core part of our hypothesis—that time-related variables explain bike demand—we began by plotting average rentals by hour, segmented by weekday/weekend. We observe a clear surge in demand during rush hours on weekdays, suggesting strong commuter usage (Figure 2 RHS). Outside of these rush hours, demand gradually increases from early morning (\~5 AM) until \~7 PM on both weekdays and weekends, showing a generally consistent usage pattern. (Figure 2 LHS) We further confirmed this with a bar plot that compares demand across rush hours and non-rush hours on both weekdays and weekends. The effect of rush hour is visibly stronger than the day-of-week difference, supporting our hypothesis that time of day is a primary driver of demand.
 
 ```{r weekday-plots, echo=FALSE, fig.pos='H', fig.cap="Rush Hour Bike Demand", fig.align='center', fig.width=9.75, fig.height=4.5, out.width='74%', fig.show='hold', warning=FALSE}
 # figure 2
@@ -187,7 +233,7 @@ p2 <- bike_demand_filtered %>%
 grid.arrange(p1, p2, nrow = 1, ncol = 2)
 ```
 
-We then examined seasonal trends, which are also important for business planning (e.g., maintenance scheduling). As we can see from this bar chart, average demand is much higher in Autumn, Spring, and Summer, compared to the average demand in Winter. We included \`is_holiday\` as a control variable to ensure that holiday-driven fluctuations aren't misattributed to seasonal effects (Figure 4) This confirms that season is an important—but stable—factor for planning purposes.
+We then examined seasonal trends, which are also important for business planning (e.g., maintenance scheduling). As we can see from this bar chart, average demand is much higher in Autumn, Spring, and Summer, compared to the average demand in Winter. We included \`is_holiday\` as a control variable to ensure that holiday-driven fluctuations aren't misattributed to seasonal effects (Figure 3) This confirms that season is an important—but stable—factor for planning purposes.
 
 ```{r season-plot, echo=FALSE, fig.pos='H', fig.cap="Seasonal Factor", fig.align='center', fig.width=9.75, fig.height=4.5, out.width='74%', fig.show='hold', warning=FALSE}
 #figure 3
@@ -274,7 +320,8 @@ kable(exp_results, format = "latex", booktabs = TRUE, caption = "Model 1 Confide
   kable_styling(
     latex_options = c("H", "hold_position", "scale_down"),  # force placement, shrink to fit
     font_size = 9  # adjust font size to make it more compact
-  )
+  )%>%
+  add_footnote("Note: Exponentiated coefficients with 95% confidence intervals")
 ```
 
 The Poisson regression model1 was specified to predict bike rental counts using weekday status, hour of day, temperature, rainfall, snowfall, and season. All variables in the model were found to be highly statistically significant, with p-values less than 0.001 and strong likelihood ratio chi-squared values, indicating each contributes meaningfully to the model. Interpreting the coefficients in multiplicative terms and holding other variables constant, we see that being a weekday increases expected rentals by approximately 11%, each additional hour in the day increases rentals by about 5.2%, and each one-degree Celsius increase in temperature boosts rentals by roughly 3.25%. In contrast, a 1% increase in rainfall leads to about a 1.9% drop in expected bike rentals. A 1% increase in snowfall leads to about a 0.36% drop in expected bike rentals. Even small increases in rain or snow can cause noticeable declines in bike usage. Seasonal effects are also strong: compared to winter, expected rentals in autumn, spring, and summer are higher by 137%, 101%, and 82%, respectively. These results align with practical expectations about biking behavior, such as higher demand during good weather and workdays.
@@ -315,7 +362,7 @@ exp_results <- data.frame(
 
 kable(exp_results, format = "latex", booktabs = TRUE, caption = "Model 3 Confidence Intervals") %>%
   kable_styling(
-    latex_options = c("H", "hold_position", "scale_down"),  # force placement, shrink to fit
+    latex_options = c("H", "hold_position", "scale_down"),
     font_size = 9  # adjust font size to make it more compact
   )
 ```
@@ -325,6 +372,21 @@ All three information criteria residual deviance, AIC, and the likelihood ratio 
 Practical findings from our best model (Model 3), highlight several key factors driving bike rental demand. Rentals are significantly higher in summer, though the interaction between temperature and summer shows that extreme heat can actually reduce usage, suggesting that warmer weather only helps up to a point. Rainfall has a strong negative impact, with even small increases leading to steep drops in rentals. Weekday rush hour nearly doubles demand, highlighting commuting as a major use case. Sunlight also increases rentals, while humidity and snowfall slightly reduce them. Winter shows the lowest demand overall, making it a strategic time for major fleet maintenance and system upgrades with minimal disruption to riders. Overall, the model shows that both environmental conditions and time-related factors strongly influence biking behavior, and interactions between them like season and temperature are essential for capturing real-world patterns.
 
 # Model Assessment
+
+Based on the residuals vs fitted plot below, we notice that there isn’t a very obvious trend, which indicates that the model is a relatively good fit for the data. We do notice some outliers with high residuals, which may be causing the downward slope in the trendline at the beginning. 
+
+```{r residual, echo=FALSE, fig.pos='H', fig.cap="Residual Plot", fig.align='center', fig.width=9.75, fig.height=4.5, out.width='74%', fig.show='hold', message=FALSE, warning=FALSE}
+
+residuals<- resid(model_poisson_3)
+fitted_vals <- model_poisson_3$fitted.values
+
+df_resid <- data.frame(
+  fitted_vals = fitted_vals,
+  resid = residuals
+)
+
+plot(model_poisson_3, which = 1, main = "Model Fit")
+```
 
 ```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
 #  poisson fit
@@ -361,51 +423,36 @@ model_nb_3 <- glm.nb(rented_bike_count ~ is_weekday
 model_nb_3 <- coeftest(model_nb_3)
 ```
 
-An assumption required for using Poisson distribution was violated in the bike rental dataset. Poisson random variables are assumed to be taken from a distribution that has a mean equal to the variance, but rented_bikes_count has a log mean of 6.59 (log(729)) and a log variance of 12.93 (log(412,615)), so it does not seem appropriate to use this method. We run a chi-square goodness of fit test on rented_bikes_count for confirmation.  At any reasonable level of significance, we reject the null hypothesis that the data came from a poisson distribution.
+An assumption required for using Poisson distribution was violated in the bike rental dataset. Poisson random variables are assumed to be taken from a distribution that has a mean equal to the variance, but rented_bikes_count has a log mean of 6.59 (log(729)) and a log variance of 12.93 (log(412,615)), so it does not seem appropriate to use this method. We run a chi-square goodness of fit test on rented_bikes_count for confirmation. At any reasonable level of significance, we reject the null hypothesis that the data came from a poisson distribution.
 
-Since the variance of rented_bikes_count is much greater than what we would expected from a poisson random variable (for which, we assume variance = mean), our models exhibit overdispersion, resulting in underestimated standard errors.  The incorrect errors lead to confidence intervals that are too narrow, which likely explains why all coefficients in our poisson models were statistically significant.  
+Since the variance of rented_bikes_count is much greater than what we would have expected from a poisson random variable (for which, we assume variance = mean), our models exhibit overdispersion, resulting in underestimated standard errors. The incorrect errors lead to confidence intervals that are too narrow, which likely explains why all coefficients in our poisson models were statistically significant.
 
-To address this problem, we first try using robust standard errors The tables below compare results from Model 3 without robust standard errors.  It does not appear that using robust standard errors is enough to correct for overdispersion in our model.  Though the confidence intervals are wider for all coefficients, all but four are still significant at the 99% level.  The table below shows the coefficients that are no longer significant when we apply robust standard errors (the two significant coefficients shown are for interaction terms that include is_weekday)
+To address this problem, we first try using robust standard errors The table below compare results from Model 3 with and without robust standard errors. It does not appear that using robust standard errors is enough to correct for overdispersion in our model. Though the confidence intervals are wider for all coefficients, all but four are still significant at the 99% level. The table below shows the coefficients that are no longer significant when we apply robust standard errors (the two significant coefficients shown are for interaction terms that include is_weekday)
 
-```{r show-stargazer-NegBinary, results='asis', echo=FALSE, message=FALSE, warning=FALSE, header=FALSE}
+```{r, results='asis', echo=FALSE, message=FALSE, warning=FALSE, fig.cap=NULL}
 stargazer(
   model_poisson_base_3, 
   model_poisson_rse_3, 
   keep = c("is_weekdayyes", "wind_speed_m_s", "visibility_10m", "temperature_c:seasonSpring"),
   column.labels = c("Poisson", "Poisson with Robust SE"),
-  type = "text", 
+  type = "latex", 
   title = "Model 3 with Robust SE",
   dep.var.labels = "",
   notes.align = "l",
   column.sep.width = "-10pt",
   font.size = "scriptsize",  
-  out.header = FALSE,
+  # out.header = FALSE,
   header = FALSE,
   comment = FALSE)
-  
 ```
-As a more extreme measure, we change our modeling approach to use Negative Binomial Regression, which introduces new coefficient estimates and a dispersion parameter. We use this approach with the same independent variables we use for Model 3 and compare the results of the two models.  Though the Negative Binomial model still had many coefficients that were significant at the 99% level, it had a much lower AIC (117,719) than the best Poisson Model 3 (1,108,725), indicating the Negative Binomial model is more appropriate for modeling rented_bikes_count. 
 
-```{r show-stargazer-NegBinary, results='asis', echo=FALSE, message=FALSE, warning=FALSE, header=FALSE}
-stargazer(model_poisson_3, 
-          model_nb_3, 
-          type = "latex", 
-          title = "Poisson vs NegBin Model 3",
-          column.labels = c("Poisson", "NegBinomial"),
-          dep.var.labels = "",
-          notes.align = "l",
-          column.sep.width = "-10pt",
-          font.size = "scriptsize",  
-          out.header = FALSE,
-          header = FALSE,
-          comment = FALSE)
-```
+As a more extreme measure, we change our modeling approach to use Negative Binomial Regression, which introduces new coefficient estimates and a dispersion parameter. We use this approach with the same independent variables we use for Model 3 and compare the results of the two models. Though the Negative Binomial model still had many coefficients that were significant at the 99% level, it had a much lower AIC (117,719) than the best Poisson Model 3 (1,108,725), indicating the Negative Binomial model is more appropriate for modeling rented_bikes_count.
 
 # Alternative Specification
 
 The results from the OLS model indicate that the time of day, weather, and seasonality are strong predictors of bike demand - consistent with the direction of coefficients from Poisson models. Specifically, holding all else constant, on average each additional hour of the day is associated with approximately 29 more bike rentals, and being in a rush hour adds an additional 89 bike rentals on average. Temperature also has a significant effect: each 1 degree increase in temperature is associated with 15 additional bike rentals. We also find that bike demand is even more sensitive to temperature increases in the shoulder seasons (Autumn and Spring); in Autumn, each 1 degree increase leads to 18 more bike rentals, and in spring, about 27 more rentals. In contrast, in summer a 1 degree increase results in 24 fewer bike rentals, suggesting that in more extreme heat, bike rental demand falls. Rainfall shows a strong negative effect: a 1-unit increase in log-transformed rainfall is associated with about 406 fewer bike rentals, showing that rainfall strongly suppresses bike demand. The model’s F-statistic is highly significant (p\<2.2e-16), which suggests that overall the explanatory variables included contribute meaningfully to explaining bike rentals. The model yields an R2 value of 0.66, indicating that the linear model explains about 66% of the variance in bike rentals. The residual standard error of 373.6 tells us that on average, the linear predictions deviate from the actual bike rental counts by about 374 bikes. 
 
-Based on the fitted plot comparing the OLS and Poisson models, the Poisson regression is a more suitable model for this dataset. The linear regression model produces some negative predictions where bike demand is below 0, which is not possible. The fitted plot reveals that the linear model also fails to accurately predict bike rental demand particularly at higher counts, as observed by the flattening of OLS (blue) fitted values as actual bike rentals increase. This suggests that the assumptions of linearity and constant variance are violated. The Poisson model better represents the nature of count data in bike rental demand, as demonstrated by Poisson (yellow) fitted values always above 0. The Poisson model also predicts bike rentals more consistently across all counts of bike demand, as observed by the symmetric shape around the dotted line. 
+Based on the fitted plot comparing the OLS and Poisson models, the Poisson regression is a more suitable model for this dataset. The linear regression model produces some negative predictions where bike demand is below 0, which is not possible. The fitted plot reveals that the linear model also fails to accurately predict bike rental demand particularly at higher counts, as observed by the flattening of OLS (blue) fitted values as actual bike rentals increase. This suggests that the assumptions of linearity and constant variance are violated. The Poisson model better represents the nature of count data in bike rental demand, as demonstrated by Poisson (yellow) fitted values always above 0. The Poisson model also predicts bike rentals more consistently across all counts of bike demand, as observed by the symmetric shape around the dotted line.
 
 ```{r ols-plot, echo=FALSE, fig.pos='H', fig.cap="Poisson Model Compared to OLS", fig.align='center', fig.width=9.75, fig.height=4.5, out.width='74%', fig.show='hold', warning=FALSE}
 model_ols <- lm(rented_bike_count ~ is_weekday + hour 
@@ -431,9 +478,44 @@ ggplot(bike_demand_filtered, aes(x = rented_bike_count)) +
   geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
   labs(y = "Fitted Values", x = "Actual Bike Rentals", title = "Fitted Values from OLS (blue) vs Poisson (yellow) Regression") +
   theme_minimal()
-
 ```
+
+\newpage
 
 # Conclusion
 
-PLACEHOLDER
+Our results supported our initial hypothesis that time of day, season, day of the week, and weather all influence the usage and demand of rental bikes. 
+
+We observed consistent results across all of our regressions, in both OLS and Poisson models. While the simple OLS linear model is easier to interpret, it is not an accurate model for our data. In particular, the linear model predicts negative counts of bike demand, and experiences higher variance. At medium to high bike demand counts, the linear model also begins to flatten and underpredict the true values, indicating that bike demand is not represented well by a linear model. Our Poisson model does a better job at predicting bike demand due to the nature of the data, since it does not predict any negative values, and exhibits relatively strong performance in predicting bike demand especially at lower to medium values. At higher demand levels in the Poisson model, we do start to see overdispersion, where the variance is increasing and therefore not constant. We attempt to correct for this by reporting robust standard errors, but these do not fully account for the overdispersion observed. We conclude that representing bike rentals with a Poisson regression model for low to medium demand is a good predictor of actual bike demand. At higher bike demand, there might be better methods to predict bike demand, and in these circumstances, we should consider alternative models such as negative binomial or log-linear models for more accurate predictions.
+
+\newpage
+
+# Appendix
+
+```{r, results='asis', echo=FALSE, message=FALSE, warning=FALSE, fig.cap=NULL, out.width='50%', fig.show='hold' }
+latex_out <- capture.output(
+  stargazer(
+    model_poisson_3,
+    model_nb_3,
+    type = "latex",
+    keep = c(
+      "is_weekdayyes", "hour", "is_dayyes", "temperature_cis_rush_houryes",
+      "temperature_c", "log1p(rainfall_mm)", "log1p(snowfall_cm)",
+      "seasonAutumn", "seasonSpring", "seasonSummer", "holidayNo Holiday",
+      "is_weekdayyes:is_dayyes", "is_weekdayyes:is_rush_houryes",
+      "temperature_c:seasonAutumn", "temperature_c:seasonSpring", "temperature_c:seasonSummer",
+      "Constant"
+    ),
+    title = "Poisson vs NegBin Model 3",
+    column.labels = c("Poisson", "NegBinomial"),
+    dep.var.labels = "",
+    notes.align = "l",
+    column.sep.width = "-20pt",     # tighter spacing between columns
+    font.size = "tiny",             # smaller than scriptsize
+    header = FALSE,
+    comment = FALSE
+  )
+)
+
+cat(latex_out, sep = "\n")
+```

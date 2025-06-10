@@ -388,7 +388,9 @@ stargazer(model_poisson_base_1, model_poisson_rse_1, type = "text", title = "Mod
 stargazer(model_poisson_base_2, model_poisson_rse_2, type = "text", title = "Model 2 with Robust SE")
 stargazer(model_poisson_base_3, model_poisson_rse_3, type = "text", title = "Model 3 with Robust SE")
 ```
-, 
+
+,
+
 ```{r}
 #  negative binomial models
 library(MASS)
@@ -446,7 +448,6 @@ stargazer(model_poisson_base_3, model_nb_3, type = "text", title = "Poisson vs N
 
 
 ```
-
 
 **Conclusion:**
 
